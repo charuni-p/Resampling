@@ -1,0 +1,40 @@
+import dask
+import xarray as xr
+import os
+
+indir='/g/data/ub4/era5/netcdf/surface/MX2T'
+year=int(os.getenv('YEAR', '2002'))
+
+ds = xr.open_mfdataset(
+        f'{indir}/{year}/*.nc',
+        combine='by_coords',
+        chunks={
+            'time':93,
+            'latitude':91,
+            'longitude':180
+            }
+        )
+
+# Update chunking
+#for v in ds:
+#    if 'chunksizes' in ds[v].encoding:
+#        ds[v] = ds[v].chunk(ds[v].encoding['chunksizes'])
+
+mx2t=ds.mx2t
+
+dailymax=mx2t.resample(time='1D').max('time')
+
+dailymax.attrs = mx2t.attrs
+dailymax.attrs['long_name'] = "Daily maximum temperature at 2 metres"
+
+ds=xr.Dataset({'dmax':dailymax})
+
+ds.to_netcdf(f'outfile_{year}.nc', 
+        encoding={
+            'dmax':{
+                'zlib':True,
+                'chunksizes':dailymax.data.chunksize,
+                'complevel':5,
+                'shuffle':True
+                }
+            })
